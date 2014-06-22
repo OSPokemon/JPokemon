@@ -1,5 +1,25 @@
-target/
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.next
-release.properties
+##########################
+# What git should ignore #
+##########################
+
+# Compiled files #
+##################
+dependency-reduced-pom.xml
+target
+site
+bin
+
+# Sublime files #
+#################
+*.sublime-project
+*.sublime-workspace
+
+# Eclipse files #
+#################
+.project
+.classpath
+*.prefs
+
+# Misc #
+########
+.DS_Store
