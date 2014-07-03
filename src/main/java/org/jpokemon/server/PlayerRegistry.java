@@ -3,14 +3,17 @@ package org.jpokemon.server;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.jpokemon.api.PokemonTrainer;
+import org.jpokemon.server.event.PokemonTrainerLogin;
 import org.json.JSONObject;
 import org.zachtaylor.emissary.Emissary;
 import org.zachtaylor.emissary.WebsocketConnection;
 import org.zachtaylor.emissary.event.WebsocketConnectionClose;
 import org.zachtaylor.emissary.event.WebsocketConnectionOpen;
 
+import com.sun.jersey.core.util.Base64;
+
 public class PlayerRegistry extends Emissary {
-	public static final PlayerRegistry instance = new PlayerRegistry();
+	private static final PlayerRegistry instance = new PlayerRegistry();
 
 	protected ConcurrentHashMap<String, WebsocketConnection> connections = new ConcurrentHashMap<String, WebsocketConnection>();
 
@@ -19,8 +22,8 @@ public class PlayerRegistry extends Emissary {
 		register(WebsocketConnectionClose.class, this);
 	}
 
-	public WebsocketConnection getWebsocketConnection(String name) {
-		return connections.get(name);
+	public static WebsocketConnection getWebsocketConnection(String name) {
+		return instance.connections.get(name);
 	}
 
 	@Override
@@ -29,20 +32,25 @@ public class PlayerRegistry extends Emissary {
 		String password = json.getString("password");
 
 		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
-		PasswordData passwordData = null;
+		UserIdentityProperty UserIdentityProperty = pokemonTrainer.getProperty(UserIdentityProperty.class);
 
-		for (Object metaData : pokemonTrainer.getMetaData()) {
-			if (metaData instanceof PasswordData) {
-				passwordData = (PasswordData) metaData;
-				break;
-			}
-		}
-
-		if (passwordData == null || passwordData.getPassword().equals(password)) {
+		if (UserIdentityProperty == null || UserIdentityProperty.getPassword().equals(password)) {
 			connections.put(name, connection);
 			connection.setEmissary(new DefaultEmissary());
-			connection.send(new JSONObject("{\"event\":\"login\"}"));
+
+			JSONObject loginEventJson = new JSONObject();
+			loginEventJson.put("event", "login");
+			connection.send(loginEventJson);
 		}
+
+		if (UserIdentityProperty != null && UserIdentityProperty.getRoles().contains("admin")) {
+			JSONObject adminEventJson = new JSONObject();
+			adminEventJson.put("event", "admin");
+			adminEventJson.put("authorizationHeader", "Basic " + new String(Base64.encode(name + ':' + password)));
+			connection.send(adminEventJson);
+		}
+
+		post(new PokemonTrainerLogin(pokemonTrainer, connection));
 	}
 
 	public void handle(WebsocketConnectionOpen event) {

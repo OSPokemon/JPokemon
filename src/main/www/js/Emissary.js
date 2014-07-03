@@ -17,7 +17,7 @@
       dataType: 'script',
       async: false,
       error: function(jqXhr, textStatus, error) {
-        console.log(error);
+        console.error(error.message);
       }
     });
 
@@ -55,16 +55,13 @@
           this[key] = new (Emissary.getController(value.controller))();
           if (value.selector && this[key].view) $(value.selector, this.view).replaceWith(this[key].view);
         }
+        else if ($.type(value) === 'function') {
+          this[key] = value.bind(this); // Pre-bind because function pointers are easier to work with then
+        }
       }
 
       if (config.hasOwnProperty('constructor')) config.constructor.apply(this, arguments);
     };
-
-    for (var fn in config) {
-      if (typeof config[fn] === 'function' && fn !== 'constructor') {
-        constructor.prototype[fn] = config[fn];
-      }
-    }
 
     controllers[name] = constructor;
   };

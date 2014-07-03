@@ -7,8 +7,10 @@ Emissary.defineController('org.jpokemon.Main', {
     JPokemon.NavBar = this;
 
     $.websocket.init();
+    $.websocket.subscribe('admin', this.attachAdminTools.bind(this));
 
     new (Emissary.getController('org.jpokemon.Login'))();
+    new (Emissary.getController('org.jpokemon.Overworld'))();
   },
 
   attachNavItem: function(name, callback, dropdown) {
@@ -17,7 +19,7 @@ Emissary.defineController('org.jpokemon.Main', {
     if (callback) {
       navItem.addListener(callback);
     }
-    if (dropdown) {
+    else if (dropdown) {
       $.each(dropdown, function(index, row) {
         navItem.addDropdownListener(row.name, row.callback);
       });
@@ -25,5 +27,9 @@ Emissary.defineController('org.jpokemon.Main', {
 
     navItem.view.appendTo(this.navItems);
     return navItem;
+  },
+
+  attachAdminTools: function(json) {
+    new (Emissary.getController('org.jpokemon.Admin'))(json.authorizationHeader);
   }
 });

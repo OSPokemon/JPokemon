@@ -9,8 +9,7 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 
 import org.jpokemon.api.PokemonTrainer;
-import org.jpokemon.server.PasswordData;
-import org.jpokemon.server.RoleData;
+import org.jpokemon.server.UserIdentityProperty;
 import org.jpokemon.server.rest.resource.SignupResource;
 
 @Path("signup")
@@ -22,19 +21,17 @@ public class SignupService {
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response doSignup(SignupResource signupResource) {
 		PokemonTrainer existingPokemonTrainer = PokemonTrainer.manager.getByName(signupResource.getName());
-		
+
 		if (existingPokemonTrainer != null) {
 			return Response.serverError().build();
 		}
 
 		PokemonTrainer pokemonTrainer = new PokemonTrainer();
 		pokemonTrainer.setName(signupResource.getName());
-		PasswordData passwordData = new PasswordData();
-		passwordData.setPassword(signupResource.getPassword());
-		pokemonTrainer.addMetaData(passwordData);
-		RoleData roleData = new RoleData();
-		roleData.addRole("user");
-		pokemonTrainer.addMetaData(roleData);
+		UserIdentityProperty userIdentityProperty = new UserIdentityProperty();
+		userIdentityProperty.setPassword(signupResource.getPassword());
+		userIdentityProperty.addRole("user");
+		pokemonTrainer.addProperty(userIdentityProperty);
 		PokemonTrainer.manager.register(pokemonTrainer);
 
 		return Response.created(uriInfo.getBaseUri().resolve("pokemontrainer/" + signupResource.getName())).build();

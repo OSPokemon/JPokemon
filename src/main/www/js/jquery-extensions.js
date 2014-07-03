@@ -10,6 +10,21 @@
 })(jQuery);
 
 (function($) {
+  // Courtesy of StackOverflow!
+  // http://stackoverflow.com/questions/5680657/adding-css-file-with-jquery/12388242#12388242
+  $.extend({
+    getCss: function(url) {
+      $.ajax({
+        url:url,
+        success: function(data) {
+          $("<style></style>").appendTo("head").html(data);
+        }
+      })
+    }
+  })
+})(jQuery);
+
+(function($) {
   var websocket,
       listeners = {};
 

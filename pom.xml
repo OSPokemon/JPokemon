@@ -43,7 +43,7 @@
 	<dependencies>
 		<dependency>
 			<groupId>org.jpokemon</groupId>
-			<artifactId>jpokemon-api</artifactId>
+			<artifactId>jpokemon-lib</artifactId>
 			<version>0.1-SNAPSHOT</version>
 		</dependency>
 		<dependency>
