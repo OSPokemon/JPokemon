@@ -32,6 +32,11 @@ public class PlayerRegistry extends Emissary {
 		String password = json.getString("password");
 
 		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
+
+		if (pokemonTrainer == null) { // NOOP
+			return;
+		}
+
 		UserIdentityProperty UserIdentityProperty = pokemonTrainer.getProperty(UserIdentityProperty.class);
 
 		if (UserIdentityProperty == null || UserIdentityProperty.getPassword().equals(password)) {

@@ -33,8 +33,8 @@ public class OverworldEmissary extends Emissary {
 
 			// TODO - make this customizable
 			locationProperty.setOverworld("bedroom");
-			locationProperty.setX(3);
-			locationProperty.setY(3);
+			locationProperty.setX(10);
+			locationProperty.setY(5);
 
 			pokemonTrainer.addProperty(locationProperty);
 		}
@@ -54,6 +54,7 @@ public class OverworldEmissary extends Emissary {
 		mapJson.put("event", "overworld-load-map");
 		mapJson.put("mapName", locationProperty.getOverworld());
 		mapJson.put("tilesets", new JSONArray(overworld.getProperty(TmxFileProperties.class).getTileSets().toString()));
+		mapJson.put("entityz", overworld.getProperty(TmxFileProperties.class).getEntityZIndex());
 
 		JSONObject playerJson = new JSONObject();
 		playerJson.put("name", pokemonTrainer.getName());

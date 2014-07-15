@@ -2,7 +2,6 @@ Emissary.defineController('org.jpokemon.Overworld', {
   players: null,
 
   constructor: function() {
-    console.log('new overworld constructor');
     this.players = {};
 
     me.sys.fps = 30;
@@ -24,24 +23,30 @@ Emissary.defineController('org.jpokemon.Overworld', {
     })));
 
     $.websocket.subscribe('login', this.onLogin);
-    $.websocket.subscribe('overworld-load-map', this.loadMap);
-    $.websocket.subscribe('overworld-add-player', this.addPlayer);
+    $.websocket.subscribe('overworld-load-map', this.onLoadMap);
+    $.websocket.subscribe('overworld-add-player', this.onAddPlayer);
 
     // (ab)use melonjs to treat this as a drawable screen entity
     me.pool.register('pokemon-trainer-draw-layer', me.ObjectEntity.extend({
-      init: function() {
-        console.log('new pokemon trainer draw layer');
+      init: function(z) {
+        this.parent(0, 0, {
+          width: 1,
+          height: 1
+        });
+        this.name = 'pokemon-trainer-draw-layer';
+        this.z = z;
       },
       update: this.onUpdate,
       draw: this.onDraw
     }), false);
 
     me.pool.register('pokemon-trainer-player', me.ObjectEntity.extend({
-      init: function() {},
-      update: function() {
-        console.log('update trainer player');
+      init: function(renderable, entityz) {
+        this.renderable = renderable;
+        this.z = entityz;
       },
-      draw: function(context) { this.parent(context) }
+      update: function() { },
+      draw: function(context) { /* let draw layer draw us */ }
     }), true);
   },
 
@@ -56,17 +61,19 @@ Emissary.defineController('org.jpokemon.Overworld', {
   },
 
   onUpdate: function() {
-    console.log('melon js update loop');
+    return true; // perma dirty
   },
 
   onDraw: function(context) {
-    console.log('melon js draw loop');
+    $.each(this.players, function(name, player) {
+      player.draw(context);
+    });
   },
 
-  loadMap: function(json) {
+  onLoadMap: function(json) {
     var mapName = json.mapName,
         players = json.players,
-        tilesets = json.tilesets,
+        entityz = json.entityz,
         requests = [];
 
     if (!me.loader.getTMX(mapName)) {
@@ -76,12 +83,21 @@ Emissary.defineController('org.jpokemon.Overworld', {
         src: 'map/' + mapName + '.tmx'
       });
     }
-    $.each(tilesets, function(i, tileset) {
+    $.each(json.tilesets, function(i, tileset) {
       if (!me.loader.getImage(tileset)) {
         requests.push({
           name: tileset,
           type: 'image',
           src: 'image/tileset/' + tileset + '.png'
+        });
+      }
+    });
+    $.each(players, function(name, player) {
+      if (!me.loader.getImage(player.avatar)) {
+        requests.push({
+          name: player.avatar,
+          type: 'image',
+          src: 'image/avatar/' + player.avatar + '.png'
         });
       }
     });
@@ -94,29 +110,47 @@ Emissary.defineController('org.jpokemon.Overworld', {
           });
 
           if (requests.length == 0) {
-            this._loadMap(mapName, players);
+            this.loadMap(mapName, entityz, players);
           }
         }.bind(this));
       }.bind(this));
     }
     else {
-      this._loadMap(mapName, players);
+      this.loadMap(mapName, entityz, players);
     }
   },
 
-  _loadMap: function(mapName, players) {
+  loadMap: function(mapName, entityz, players) {
+    debugger;
     me.levelDirector.loadLevel(mapName);
-    me.game.world.addChild(me.pool.pull('pokemon-trainer-draw-layer'));
+    me.game.world.addChild(me.pool.pull('pokemon-trainer-draw-layer', entityz));
 
     $.each(players, function(index, playerJson) {
       this.addPlayer(playerJson);
 
       if (index < 1) {
-        this.players[playerJson.name].entity = me.pool.pull('pokemon-trainer-player', playerJson);
+        this.players[playerJson.name].entity = me.pool.pull('pokemon-trainer-player', this.players[playerJson.name].renderable, entityz);
         me.game.world.addChild(this.players[playerJson.name].entity);
         me.game.viewport.follow(this.players[playerJson.name].entity, me.game.viewport.AXIS.BOTH);
       }
     }.bind(this));
+
+    me.game.world.sort();
+  },
+
+  onAddPlayer: function(json) {
+    if (!me.loader.getImage(json.avatar)) {
+      me.loader.load({
+        name: json.avatar,
+        type: 'image',
+        src: 'image/avatar/' + json.avatar + '.png'
+      }, function() {
+        this.addPlayer(json);
+      }.bind(this));
+    }
+    else {
+      this.addPlayer(json);
+    }
   },
 
   addPlayer: function(json) {
