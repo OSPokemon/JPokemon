@@ -1,11 +1,13 @@
 package org.jpokemon;
 
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.jpokemon.api.Overworld;
 import org.jpokemon.api.PokemonTrainer;
 import org.jpokemon.api.PropertyProvider;
 import org.jpokemon.manager.ClassicEvolutionFactoryManager;
 import org.jpokemon.manager.ClassicExperienceCurveManager;
 import org.jpokemon.manager.ClassicTypeManager;
+import org.jpokemon.manager.HashedCachingManager;
 import org.jpokemon.manager.SimpleAbilityManager;
 import org.jpokemon.manager.SimpleBattleEffectFactoryManager;
 import org.jpokemon.manager.SimpleContestCategoryManager;
@@ -49,7 +51,7 @@ public class Main {
 		SimpleItemManager.init();
 		SimpleMoveManager.init();
 		SimpleNatureManager.init();
-		TmxFileOverworldManager.init("src/main/www/map");
+		Overworld.manager = new HashedCachingManager<Overworld>(new TmxFileOverworldManager("src/main/www/map"));
 		SimplePokemonManager.init();
 		SimplePokemonTrainerManager.init();
 		SimpleSpeciesManager.init();
@@ -84,7 +86,7 @@ public class Main {
 		UserIdentityProperty userIdentity = new UserIdentityProperty();
 		userIdentity.setPassword("user");
 		userIdentity.addRole("user");
-		adminTrainer.addProperty(userIdentity);
+		userTrainer.addProperty(userIdentity);
 		PokemonTrainer.manager.register(userTrainer);
 	}
 }

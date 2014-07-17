@@ -1,5 +1,8 @@
 Emissary.defineController('org.jpokemon.Overworld', {
   players: null,
+  nextMove: null,
+  nextMoveDelayCounter: 0,
+  nextMoveDelayThreshold: 3,
 
   constructor: function() {
     this.players = {};
@@ -25,6 +28,7 @@ Emissary.defineController('org.jpokemon.Overworld', {
     $.websocket.subscribe('login', this.onLogin);
     $.websocket.subscribe('overworld-load-map', this.onLoadMap);
     $.websocket.subscribe('overworld-add-player', this.onAddPlayer);
+    $.websocket.subscribe('overworld-move', this.onMovePlayer);
 
     // (ab)use melonjs to treat this as a drawable screen entity
     me.pool.register('pokemon-trainer-draw-layer', me.ObjectEntity.extend({
@@ -54,13 +58,66 @@ Emissary.defineController('org.jpokemon.Overworld', {
     if (me.video.init("screen", 640, 480, true, 'auto')) {
       me.audio.init("mp3,ogg");
       me.state.change(me.state.PLAY);
+
+      this.setupControls();
     }
     else {
       alert("Your browser does not support HTML5 canvas.");
     }
   },
 
+  setupControls: function() {
+    // TODO - check the user agent maybe, load controls for a platform
+    new (Emissary.getController('org.jpokemon.KeyboardInput'))();
+  },
+
   onUpdate: function() {
+    if (JPokemon.input) {
+      if (this.nextMove) {
+        var direction = 'undefined';
+
+        switch(this.nextMove) {
+          case JPokemon.input.keys[0]: direction = 'up'; break;
+          case JPokemon.input.keys[1]: direction = 'left'; break;
+          case JPokemon.input.keys[2]: direction = 'down'; break;
+          case JPokemon.input.keys[3]: direction = 'right'; break;
+        }
+
+        if (this.nextMove === JPokemon.input.keyPressed) {
+          if (++this.nextMoveDelayCounter >= this.nextMoveDelayThreshold) {
+            this.nextMoveDelayCounter -= this.nextMoveDelayThreshold;
+
+            $.websocket.send({
+              event: 'overworld',
+              action: 'move',
+              direction: direction
+            });
+          }
+        }
+        else {
+          $.websocket.send({
+            event: 'overworld',
+            action: 'look',
+            direction: direction
+          });
+          this.nextMove = null;
+        }
+      }
+      else if (JPokemon.input.keyPressed === JPokemon.input.keys[4]) {
+        $.websocket.send({
+          event: 'overworld',
+          action: 'interact'
+        });
+      }
+      else {
+        this.nextMove = JPokemon.input.keyPressed;
+      }
+    }
+
+    $.each(this.players, function(name, player) {
+      player.update();
+    });
+
     return true; // perma dirty
   },
 
@@ -121,7 +178,6 @@ Emissary.defineController('org.jpokemon.Overworld', {
   },
 
   loadMap: function(mapName, entityz, players) {
-    debugger;
     me.levelDirector.loadLevel(mapName);
     me.game.world.addChild(me.pool.pull('pokemon-trainer-draw-layer', entityz));
 
@@ -129,9 +185,10 @@ Emissary.defineController('org.jpokemon.Overworld', {
       this.addPlayer(playerJson);
 
       if (index < 1) {
-        this.players[playerJson.name].entity = me.pool.pull('pokemon-trainer-player', this.players[playerJson.name].renderable, entityz);
-        me.game.world.addChild(this.players[playerJson.name].entity);
-        me.game.viewport.follow(this.players[playerJson.name].entity, me.game.viewport.AXIS.BOTH);
+        JPokemon.player = playerJson.name;
+        this.players[JPokemon.player].entity = me.pool.pull('pokemon-trainer-player', this.players[JPokemon.player].renderable, entityz);
+        me.game.world.addChild(this.players[JPokemon.player].entity);
+        me.game.viewport.follow(this.players[JPokemon.player].entity, me.game.viewport.AXIS.BOTH);
       }
     }.bind(this));
 
@@ -139,6 +196,7 @@ Emissary.defineController('org.jpokemon.Overworld', {
   },
 
   onAddPlayer: function(json) {
+    debugger;
     if (!me.loader.getImage(json.avatar)) {
       me.loader.load({
         name: json.avatar,
@@ -155,5 +213,9 @@ Emissary.defineController('org.jpokemon.Overworld', {
 
   addPlayer: function(json) {
     this.players[json.name] = new (Emissary.getController('org.jpokemon.overworld.PokemonTrainer'))(json);
+  },
+
+  onMovePlayer: function(json) {
+    this.players[json.name].addMoveToQueue(json);
   }
 });

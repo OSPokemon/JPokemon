@@ -10,17 +10,29 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.zachtaylor.emissary.Emissary;
 import org.zachtaylor.emissary.WebsocketConnection;
+import org.zachtaylor.emissary.event.WebsocketConnectionClose;
 
 public class OverworldEmissary extends Emissary {
 	public static final OverworldEmissary instance = new OverworldEmissary();
 
 	private OverworldEmissary() {
 		register(PokemonTrainerLogin.class, this);
+		register(WebsocketConnectionClose.class, this);
 	}
 
 	@Override
-	public void serve(WebsocketConnection arg0, JSONObject arg1) {
+	public void serve(WebsocketConnection connection, JSONObject json) {
+		String action = json.getString("action");
 
+		if ("move".equals(action)) {
+			move(connection, json);
+		}
+		else if ("look".equals(action)) {
+			look(connection, json);
+		}
+		else if ("interact".equals(action)) {
+			interact(connection, json);
+		}
 	}
 
 	public void handle(PokemonTrainerLogin event) {
@@ -86,5 +98,70 @@ public class OverworldEmissary extends Emissary {
 
 			overworld.addPokemonTrainer(pokemonTrainer.getName());
 		}
+	}
+
+	public void handle(WebsocketConnectionClose event) {
+		String name = event.getWebsocket().getName();
+
+		if (name == null) {
+			return;
+		}
+
+		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
+		OverworldLocationProperty locationProperty = pokemonTrainer.getProperty(OverworldLocationProperty.class);
+		Overworld overworld = Overworld.manager.getByName(locationProperty.getOverworld());
+
+		synchronized (overworld) {
+			overworld.removePokemonTrainer(name);
+		}
+	}
+
+	public void move(WebsocketConnection connection, JSONObject json) {
+		String name = connection.getName();
+		String direction = json.getString("direction");
+		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
+		OverworldLocationProperty location = pokemonTrainer.getProperty(OverworldLocationProperty.class);
+		Overworld overworld = Overworld.manager.getByName(location.getOverworld());
+
+		JSONObject updateJson = new JSONObject();
+		updateJson.put("event", "overworld-move");
+		updateJson.put("name", name);
+
+		if ("up".equals(direction)) {
+			location.setY(Math.max(location.getY() - 1, 0));
+			updateJson.put("animation", "walkup");
+		}
+		else if ("left".equals(direction)) {
+			location.setX(Math.max(location.getX() - 1, 0));
+			updateJson.put("animation", "walkleft");
+		}
+		else if ("down".equals(direction)) {
+			location.setY(Math.min(location.getY() + 1, overworld.getHeight() - 1));
+			updateJson.put("animation", "walkdown");
+		}
+		else if ("right".equals(direction)) {
+			location.setX(Math.min(location.getX() + 1, overworld.getWidth() - 1));
+			updateJson.put("animation", "walkright");
+		}
+
+		updateJson.put("x", location.getX());
+		updateJson.put("y", location.getY());
+
+		synchronized (overworld) {
+			for (String playerName : overworld.getPokemonTrainers()) {
+				WebsocketConnection playerConnection = PlayerRegistry.getWebsocketConnection(playerName);
+				playerConnection.send(updateJson);
+			}
+		}
+
+		System.out.println("Send json object: " + updateJson.toString());
+	}
+
+	public void look(WebsocketConnection connection, JSONObject json) {
+
+	}
+
+	public void interact(WebsocketConnection connection, JSONObject json) {
+
 	}
 }

@@ -41,6 +41,7 @@ public class PlayerRegistry extends Emissary {
 
 		if (UserIdentityProperty == null || UserIdentityProperty.getPassword().equals(password)) {
 			connections.put(name, connection);
+			connection.setName(name);
 			connection.setEmissary(new DefaultEmissary());
 
 			JSONObject loginEventJson = new JSONObject();
