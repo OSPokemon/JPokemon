@@ -9,7 +9,7 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 
 import org.jpokemon.api.PokemonTrainer;
-import org.jpokemon.server.UserIdentityProperty;
+import org.jpokemon.property.trainer.server.UserIdentityProperty;
 import org.jpokemon.server.rest.resource.SignupResource;
 
 @Path("signup")

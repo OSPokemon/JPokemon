@@ -2,7 +2,7 @@ Emissary.defineController('org.jpokemon.Overworld', {
   players: null,
   nextMove: null,
   nextMoveDelayCounter: 0,
-  nextMoveDelayThreshold: 3,
+  moveDelayThreshold: 2,
 
   constructor: function() {
     this.players = {};
@@ -71,7 +71,7 @@ Emissary.defineController('org.jpokemon.Overworld', {
     new (Emissary.getController('org.jpokemon.KeyboardInput'))();
   },
 
-  onUpdate: function() {
+  onUpdate: function(dt) {
     if (JPokemon.input) {
       if (this.nextMove) {
         var direction = 'undefined';
@@ -84,8 +84,8 @@ Emissary.defineController('org.jpokemon.Overworld', {
         }
 
         if (this.nextMove === JPokemon.input.keyPressed) {
-          if (++this.nextMoveDelayCounter >= this.nextMoveDelayThreshold) {
-            this.nextMoveDelayCounter -= this.nextMoveDelayThreshold;
+          if (++this.nextMoveDelayCounter >= this.moveDelayThreshold && this.players[JPokemon.player].moveQueue.length < 2) {
+            this.nextMoveDelayCounter -= this.moveDelayThreshold;
 
             $.websocket.send({
               event: 'overworld',
@@ -94,7 +94,7 @@ Emissary.defineController('org.jpokemon.Overworld', {
             });
           }
         }
-        else {
+        else if (direction) {
           $.websocket.send({
             event: 'overworld',
             action: 'look',
@@ -111,14 +111,18 @@ Emissary.defineController('org.jpokemon.Overworld', {
       }
       else {
         this.nextMove = JPokemon.input.keyPressed;
+        this.nextMoveDelayCounter = 0;
       }
     }
 
+    var dirty = false;
+
     $.each(this.players, function(name, player) {
-      player.update();
+      dirty = dirty || player.update(dt);
+      return !dirty;
     });
 
-    return true; // perma dirty
+    return true;
   },
 
   onDraw: function(context) {

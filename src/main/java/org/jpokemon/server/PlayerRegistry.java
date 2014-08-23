@@ -3,6 +3,7 @@ package org.jpokemon.server;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.jpokemon.api.PokemonTrainer;
+import org.jpokemon.property.trainer.server.UserIdentityProperty;
 import org.jpokemon.server.event.PokemonTrainerLogin;
 import org.json.JSONObject;
 import org.zachtaylor.emissary.Emissary;

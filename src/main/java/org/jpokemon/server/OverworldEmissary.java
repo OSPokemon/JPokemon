@@ -73,6 +73,7 @@ public class OverworldEmissary extends Emissary {
 		playerJson.put("avatar", avatarsProperty.getAvatar());
 		playerJson.put("x", locationProperty.getX());
 		playerJson.put("y", locationProperty.getY());
+		playerJson.put("moveSpeed", (String) pokemonTrainer.getProperty("moveSpeed"));
 
 		JSONArray playersArray = new JSONArray();
 		playersArray.put(playerJson);
@@ -87,6 +88,7 @@ public class OverworldEmissary extends Emissary {
 				otherPlayerJson.put("avatar", avatarsProperty.getAvatar());
 				otherPlayerJson.put("x", locationProperty.getX());
 				otherPlayerJson.put("y", locationProperty.getY());
+				otherPlayerJson.put("moveSpeed", (String) otherPokemonTrainer.getProperty("moveSpeed"));
 
 				WebsocketConnection otherPlayerConnection = PlayerRegistry.getWebsocketConnection(otherPlayerName);
 				otherPlayerConnection.send(playerJson);
@@ -118,8 +120,41 @@ public class OverworldEmissary extends Emissary {
 
 	public void move(WebsocketConnection connection, JSONObject json) {
 		String name = connection.getName();
-		String direction = json.getString("direction");
 		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
+
+		// Beware. I'm writing this part to try to short circuit
+
+		Object moveSpeedString = pokemonTrainer.getProperty("moveSpeed");
+		if (moveSpeedString == null) {
+			// TODO - base move speed should be a setting or something
+			pokemonTrainer.setProperty("moveSpeed", moveSpeedString = "500");
+		}
+		long moveSpeed = Long.parseLong((String) moveSpeedString);
+
+		long timeNow = System.currentTimeMillis();
+
+		Object moveTimeString = pokemonTrainer.getProperty("moveTime");
+		if (moveTimeString == null) {
+			// The truth is it doesn't matter what this value is
+			// Anything significantly < timeNow should trigger a move
+			pokemonTrainer.setProperty("moveTime", moveTimeString = "0");
+		}
+		long moveTime = Long.parseLong((String) moveTimeString);
+
+		if (timeNow < moveTime - (moveSpeed / 4)) {
+			// Allow to submit the next move if you are 75% of the way moved
+			// helps to decrease stutter
+			System.out.println("Player spamming move command: " + name);
+			return;
+		}
+
+		// onward with accepting the move then!
+		System.out.println("Move command accepted for player: [" + name + "] with timing: [" + moveTimeString + ","
+				+ moveSpeedString + "] @" + timeNow);
+		moveTime = Math.max(moveTime, timeNow) + moveSpeed;
+		pokemonTrainer.setProperty("moveTime", moveTime + "");
+
+		String direction = json.getString("direction");
 		OverworldLocationProperty location = pokemonTrainer.getProperty(OverworldLocationProperty.class);
 		Overworld overworld = Overworld.manager.getByName(location.getOverworld());
 
@@ -153,8 +188,6 @@ public class OverworldEmissary extends Emissary {
 				playerConnection.send(updateJson);
 			}
 		}
-
-		System.out.println("Send json object: " + updateJson.toString());
 	}
 
 	public void look(WebsocketConnection connection, JSONObject json) {
