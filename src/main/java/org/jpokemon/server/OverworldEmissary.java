@@ -1,7 +1,15 @@
 package org.jpokemon.server;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.jpokemon.api.Action;
+import org.jpokemon.api.ActionSet;
+import org.jpokemon.api.MovementScheme;
 import org.jpokemon.api.Overworld;
+import org.jpokemon.api.OverworldEntity;
 import org.jpokemon.api.PokemonTrainer;
+import org.jpokemon.api.Requirement;
 import org.jpokemon.property.overworld.TmxFileProperties;
 import org.jpokemon.property.trainer.AvatarsProperty;
 import org.jpokemon.property.trainer.OverworldLocationProperty;
@@ -47,6 +55,7 @@ public class OverworldEmissary extends Emissary {
 			locationProperty.setOverworld("bedroom");
 			locationProperty.setX(10);
 			locationProperty.setY(5);
+			locationProperty.setDirection("down");
 
 			pokemonTrainer.addProperty(locationProperty);
 		}
@@ -122,65 +131,59 @@ public class OverworldEmissary extends Emissary {
 		String name = connection.getName();
 		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
 
-		// Beware. I'm writing this part to try to short circuit
-
-		Object moveSpeedString = pokemonTrainer.getProperty("moveSpeed");
-		if (moveSpeedString == null) {
-			// TODO - base move speed should be a setting or something
-			pokemonTrainer.setProperty("moveSpeed", moveSpeedString = "500");
-		}
-		long moveSpeed = Long.parseLong((String) moveSpeedString);
-
-		long timeNow = System.currentTimeMillis();
-
-		Object moveTimeString = pokemonTrainer.getProperty("moveTime");
-		if (moveTimeString == null) {
-			// The truth is it doesn't matter what this value is
-			// Anything significantly < timeNow should trigger a move
-			pokemonTrainer.setProperty("moveTime", moveTimeString = "0");
-		}
-		long moveTime = Long.parseLong((String) moveTimeString);
-
-		if (timeNow < moveTime - (moveSpeed / 4)) {
-			// Allow to submit the next move if you are 75% of the way moved
-			// helps to decrease stutter
-			System.out.println("Player spamming move command: " + name);
+		if (!_checkClock(pokemonTrainer)) {
 			return;
 		}
-
-		// onward with accepting the move then!
-		System.out.println("Move command accepted for player: [" + name + "] with timing: [" + moveTimeString + ","
-				+ moveSpeedString + "] @" + timeNow);
-		moveTime = Math.max(moveTime, timeNow) + moveSpeed;
-		pokemonTrainer.setProperty("moveTime", moveTime + "");
+		_recordClock(pokemonTrainer);
 
 		String direction = json.getString("direction");
 		OverworldLocationProperty location = pokemonTrainer.getProperty(OverworldLocationProperty.class);
 		Overworld overworld = Overworld.manager.getByName(location.getOverworld());
 
+		OverworldLocationProperty nextLocation = _locationInDirection(overworld, location, direction);
+
+		if (nextLocation == null) {
+			return;
+		}
+
+		List<OverworldEntity> entitiesInside = _getEntitiesAt(overworld, location);
+		List<OverworldEntity> entitiesNext = _getEntitiesAt(overworld, location);
+
+		for (OverworldEntity overworldEntity : entitiesInside) {
+			MovementScheme movementScheme = MovementScheme.manager.getByName(overworldEntity.getMovement());
+
+			if (movementScheme == null) {
+				continue;
+			}
+
+			if (!movementScheme.canExitToward(direction)) {
+				return;
+			}
+		}
+
+		String oppositeDirection = _oppositeDirection(direction);
+
+		for (OverworldEntity overworldEntity : entitiesNext) {
+			MovementScheme movementScheme = MovementScheme.manager.getByName(overworldEntity.getMovement());
+
+			if (movementScheme == null) {
+				continue;
+			}
+
+			if (!movementScheme.canEnterFrom(oppositeDirection)) {
+				return;
+			}
+		}
+
+		location.setX(nextLocation.getX());
+		location.setY(nextLocation.getY());
+
 		JSONObject updateJson = new JSONObject();
 		updateJson.put("event", "overworld-move");
 		updateJson.put("name", name);
-
-		if ("up".equals(direction)) {
-			location.setY(Math.max(location.getY() - 1, 0));
-			updateJson.put("animation", "walkup");
-		}
-		else if ("left".equals(direction)) {
-			location.setX(Math.max(location.getX() - 1, 0));
-			updateJson.put("animation", "walkleft");
-		}
-		else if ("down".equals(direction)) {
-			location.setY(Math.min(location.getY() + 1, overworld.getHeight() - 1));
-			updateJson.put("animation", "walkdown");
-		}
-		else if ("right".equals(direction)) {
-			location.setX(Math.min(location.getX() + 1, overworld.getWidth() - 1));
-			updateJson.put("animation", "walkright");
-		}
-
-		updateJson.put("x", location.getX());
-		updateJson.put("y", location.getY());
+		updateJson.put("animation", "walk" + direction);
+		updateJson.put("x", nextLocation.getX());
+		updateJson.put("y", nextLocation.getY());
 
 		synchronized (overworld) {
 			for (String playerName : overworld.getPokemonTrainers()) {
@@ -191,10 +194,227 @@ public class OverworldEmissary extends Emissary {
 	}
 
 	public void look(WebsocketConnection connection, JSONObject json) {
+		String name = connection.getName();
+		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
 
+		if (!_checkClock(pokemonTrainer)) {
+			return;
+		}
+		// Don't record clock here
+
+		String direction = json.getString("direction");
+
+		if (_oppositeDirection(direction) == null) { // direction was invalid
+			return;
+		}
+
+		OverworldLocationProperty location = pokemonTrainer.getProperty(OverworldLocationProperty.class);
+		Overworld overworld = Overworld.manager.getByName(location.getOverworld());
+
+		JSONObject updateJson = new JSONObject();
+		updateJson.put("event", "overworld-look");
+		updateJson.put("name", name);
+		updateJson.put("direction", direction);
+
+		synchronized (overworld) {
+			for (String playerName : overworld.getPokemonTrainers()) {
+				WebsocketConnection playerConnection = PlayerRegistry.getWebsocketConnection(playerName);
+				playerConnection.send(updateJson);
+			}
+		}
 	}
 
 	public void interact(WebsocketConnection connection, JSONObject json) {
+		String name = connection.getName();
+		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
 
+		if (!_checkClock(pokemonTrainer)) {
+			return;
+		}
+		// Don't record clock here
+
+		String direction = json.getString("direction");
+		OverworldLocationProperty location = pokemonTrainer.getProperty(OverworldLocationProperty.class);
+		Overworld overworld = Overworld.manager.getByName(location.getOverworld());
+
+		OverworldLocationProperty nextLocation = _locationInDirection(overworld, location, direction);
+
+		if (nextLocation == null) {
+			return;
+		}
+
+		List<OverworldEntity> entities = _getEntitiesAt(overworld, nextLocation);
+
+		List<String> entitiesWithInteractOptions = new ArrayList<String>();
+
+		for (OverworldEntity entity : entities) {
+			List<ActionSet> actionSets = entity.getActionSets("interact");
+
+			if (actionSets != null && actionSets.size() > 0) {
+				entitiesWithInteractOptions.add(entity.getName());
+			}
+		}
+
+		if (entitiesWithInteractOptions.size() > 1) {
+			// TODO - send question to which entity to interact to i guess
+			return;
+		}
+		if (entitiesWithInteractOptions.size() < 1) {
+			return;
+		}
+
+		OverworldEntity entity = null;
+		for (OverworldEntity e : entities) {
+			if (entitiesWithInteractOptions.contains(e.getName())) {
+				entity = e;
+				break;
+			}
+		}
+
+		List<ActionSet> actionSets = entity.getActionSets("interact");
+
+		if (actionSets.size() > 1) {
+			// TODO - send question to have a chat choice i guess
+			return;
+		}
+
+		ActionSet actionSet = actionSets.get(0);
+
+		for (Requirement requirement : actionSet.getRequirements()) {
+			if (!requirement.isSatisfied(pokemonTrainer)) {
+				return;
+			}
+		}
+
+		for (Action action : actionSet.getActions()) {
+			action.execute(pokemonTrainer);
+		}
+	}
+
+	private boolean _checkClock(PokemonTrainer pokemonTrainer) {
+		long moveSpeed = _safeGetMoveSpeed(pokemonTrainer);
+		long moveTime = _safeGetMoveTime(pokemonTrainer);
+		long timeNow = System.currentTimeMillis();
+
+		if (timeNow < moveTime - (moveSpeed / 4)) {
+			// Allow to submit the next move if you are 75% of the way moved
+			// helps to decrease stutter
+			return false;
+		}
+
+		return true;
+	}
+
+	private void _recordClock(PokemonTrainer pokemonTrainer) {
+		long moveSpeed = _safeGetMoveSpeed(pokemonTrainer);
+		long moveTime = _safeGetMoveTime(pokemonTrainer);
+		long timeNow = System.currentTimeMillis();
+
+		moveTime = Math.max(moveTime, timeNow) + moveSpeed;
+		pokemonTrainer.setProperty("moveTime", moveTime + "");
+	}
+
+	private List<OverworldEntity> _getEntitiesAt(Overworld overworld, OverworldLocationProperty location) {
+		List<OverworldEntity> overworldEntities = new ArrayList<OverworldEntity>();
+
+		for (OverworldEntity overworldEntity : overworld.getEntities()) {
+			if (overworldEntity.getX() <= location.getX()
+					&& overworldEntity.getX() + overworldEntity.getWidth() - 1 >= location.getX()
+					&& overworldEntity.getY() <= location.getY()
+					&& overworldEntity.getY() + overworldEntity.getWidth() - 1 >= location.getY()) {
+
+				overworldEntities.add(overworldEntity);
+
+			}
+		}
+
+		return overworldEntities;
+	}
+
+	private OverworldLocationProperty _locationInDirection(Overworld overworld, OverworldLocationProperty location,
+			String direction) {
+		OverworldLocationProperty nextLocation = new OverworldLocationProperty();
+
+		nextLocation.setOverworld(location.getOverworld());
+		nextLocation.setX(location.getX());
+		nextLocation.setY(location.getY());
+
+		if ("up".equals(direction)) {
+			if (location.getY() < 1) {
+				nextLocation = null;
+			}
+			else {
+				nextLocation.setY(location.getY() - 1);
+			}
+		}
+		else if ("left".equals(direction)) {
+			if (location.getX() < 1) {
+				nextLocation = null;
+			}
+			else {
+				nextLocation.setX(location.getX() - 1);
+			}
+		}
+		else if ("down".equals(direction)) {
+			if (overworld.getHeight() - 1 == location.getY()) {
+				nextLocation = null;
+			}
+			else {
+				nextLocation.setY(overworld.getHeight() - 1);
+			}
+		}
+		else if ("right".equals(direction)) {
+			if (overworld.getWidth() - 1 == location.getX()) {
+				nextLocation = null;
+			}
+			else {
+				nextLocation.setX(location.getX() + 1);
+			}
+		}
+		else { // Invalid move
+			nextLocation = null;
+		}
+
+		return nextLocation;
+	}
+
+	private Long _safeGetMoveSpeed(PokemonTrainer pokemonTrainer) {
+		Object moveSpeedString = pokemonTrainer.getProperty("moveSpeed");
+
+		if (moveSpeedString == null) {
+			// TODO - base move speed should be a setting or something
+			pokemonTrainer.setProperty("moveSpeed", moveSpeedString = "500");
+		}
+
+		return Long.parseLong((String) moveSpeedString);
+	}
+
+	private Long _safeGetMoveTime(PokemonTrainer pokemonTrainer) {
+		Object moveTimeString = pokemonTrainer.getProperty("moveTime");
+
+		if (moveTimeString == null) {
+			// The truth is it doesn't matter what this value is
+			// Anything significantly < timeNow should trigger a move
+			pokemonTrainer.setProperty("moveTime", moveTimeString = "0");
+		}
+
+		return Long.parseLong((String) moveTimeString);
+	}
+
+	private String _oppositeDirection(String direction) {
+		if ("up".equals(direction)) {
+			return "down";
+		}
+		if ("left".equals(direction)) {
+			return "right";
+		}
+		if ("down".equals(direction)) {
+			return "up";
+		}
+		else if ("right".equals(direction)) {
+			return "left";
+		}
+
+		return null;
 	}
 }
