@@ -1,11 +1,5 @@
-Emissary.defineController('org.jpokemon.Overworld', {
-  players: null,
-  nextMove: null,
-  nextMoveDelayCounter: 0,
-  moveDelayThreshold: 2,
-
+Emissary.defineController('org.jpokemon.overworld.Overworld', {
   constructor: function() {
-    this.players = {};
 
     me.sys.fps = 30;
     me.sys.pauseOnBlur = false;
@@ -29,6 +23,7 @@ Emissary.defineController('org.jpokemon.Overworld', {
     $.websocket.subscribe('overworld-load-map', this.onLoadMap);
     $.websocket.subscribe('overworld-add-player', this.onAddPlayer);
     $.websocket.subscribe('overworld-move', this.onMovePlayer);
+    $.websocket.subscribe('overworld-look', this.onLookPlayer);
 
     // (ab)use melonjs to treat this as a drawable screen entity
     me.pool.register('pokemon-trainer-draw-layer', me.ObjectEntity.extend({
@@ -59,74 +54,23 @@ Emissary.defineController('org.jpokemon.Overworld', {
       me.audio.init("mp3,ogg");
       me.state.change(me.state.PLAY);
 
-      this.setupControls();
+      JPokemon.canvas = $('#screen')[0].children[0];
     }
     else {
       alert("Your browser does not support HTML5 canvas.");
     }
   },
 
-  setupControls: function() {
-    // TODO - check the user agent maybe, load controls for a platform
-    new (Emissary.getController('org.jpokemon.KeyboardInput'))();
-  },
-
   onUpdate: function(dt) {
-    if (JPokemon.input) {
-      if (this.nextMove) {
-        var direction = 'undefined';
-
-        switch(this.nextMove) {
-          case JPokemon.input.keys[0]: direction = 'up'; break;
-          case JPokemon.input.keys[1]: direction = 'left'; break;
-          case JPokemon.input.keys[2]: direction = 'down'; break;
-          case JPokemon.input.keys[3]: direction = 'right'; break;
-        }
-
-        if (this.nextMove === JPokemon.input.keyPressed) {
-          if (++this.nextMoveDelayCounter >= this.moveDelayThreshold && this.players[JPokemon.player].moveQueue.length < 2) {
-            this.nextMoveDelayCounter -= this.moveDelayThreshold;
-
-            $.websocket.send({
-              event: 'overworld',
-              action: 'move',
-              direction: direction
-            });
-          }
-        }
-        else if (direction) {
-          $.websocket.send({
-            event: 'overworld',
-            action: 'look',
-            direction: direction
-          });
-          this.nextMove = null;
-        }
-      }
-      else if (JPokemon.input.keyPressed === JPokemon.input.keys[4]) {
-        $.websocket.send({
-          event: 'overworld',
-          action: 'interact'
-        });
-      }
-      else {
-        this.nextMove = JPokemon.input.keyPressed;
-        this.nextMoveDelayCounter = 0;
-      }
-    }
-
-    var dirty = false;
-
-    $.each(this.players, function(name, player) {
-      dirty = dirty || player.update(dt);
-      return !dirty;
+    $.each(JPokemon.players, function(name, player) {
+      player.update(dt);
     });
 
     return true;
   },
 
   onDraw: function(context) {
-    $.each(this.players, function(name, player) {
+    $.each(JPokemon.players, function(name, player) {
       player.draw(context);
     });
   },
@@ -190,9 +134,9 @@ Emissary.defineController('org.jpokemon.Overworld', {
 
       if (index < 1) {
         JPokemon.player = playerJson.name;
-        this.players[JPokemon.player].entity = me.pool.pull('pokemon-trainer-player', this.players[JPokemon.player].renderable, entityz);
-        me.game.world.addChild(this.players[JPokemon.player].entity);
-        me.game.viewport.follow(this.players[JPokemon.player].entity, me.game.viewport.AXIS.BOTH);
+        JPokemon.players[JPokemon.player].entity = me.pool.pull('pokemon-trainer-player', JPokemon.players[JPokemon.player].renderable, entityz);
+        me.game.world.addChild(JPokemon.players[JPokemon.player].entity);
+        me.game.viewport.follow(JPokemon.players[JPokemon.player].entity, me.game.viewport.AXIS.BOTH);
       }
     }.bind(this));
 
@@ -200,7 +144,6 @@ Emissary.defineController('org.jpokemon.Overworld', {
   },
 
   onAddPlayer: function(json) {
-    debugger;
     if (!me.loader.getImage(json.avatar)) {
       me.loader.load({
         name: json.avatar,
@@ -216,10 +159,15 @@ Emissary.defineController('org.jpokemon.Overworld', {
   },
 
   addPlayer: function(json) {
-    this.players[json.name] = new (Emissary.getController('org.jpokemon.overworld.PokemonTrainer'))(json);
+    JPokemon.players[json.name] = new (Emissary.getController('org.jpokemon.overworld.PokemonTrainer'))(json);
   },
 
   onMovePlayer: function(json) {
-    this.players[json.name].addMoveToQueue(json);
+    JPokemon.players[json.name].addMoveToQueue(json);
+  },
+
+  onLookPlayer: function(json) {
+    JPokemon.players[json.name].renderable.setCurrentAnimation('walk' + json.direction);
+    JPokemon.players[json.name].renderable.animationpause = true;
   }
 });

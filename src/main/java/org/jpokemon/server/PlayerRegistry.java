@@ -11,8 +11,6 @@ import org.zachtaylor.emissary.WebsocketConnection;
 import org.zachtaylor.emissary.event.WebsocketConnectionClose;
 import org.zachtaylor.emissary.event.WebsocketConnectionOpen;
 
-import com.sun.jersey.core.util.Base64;
-
 public class PlayerRegistry extends Emissary {
 	private static final PlayerRegistry instance = new PlayerRegistry();
 
@@ -48,13 +46,6 @@ public class PlayerRegistry extends Emissary {
 			JSONObject loginEventJson = new JSONObject();
 			loginEventJson.put("event", "login");
 			connection.send(loginEventJson);
-		}
-
-		if (UserIdentityProperty != null && UserIdentityProperty.getRoles().contains("admin")) {
-			JSONObject adminEventJson = new JSONObject();
-			adminEventJson.put("event", "admin");
-			adminEventJson.put("authorizationHeader", "Basic " + new String(Base64.encode(name + ':' + password)));
-			connection.send(adminEventJson);
 		}
 
 		post(new PokemonTrainerLogin(pokemonTrainer, connection));

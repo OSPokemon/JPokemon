@@ -2,10 +2,6 @@ Emissary.defineController('org.jpokemon.Login', {
   formElement: '.formElement',
   usernameInputField: '.username-input',
   passwordInputField: '.password-input',
-  loginButton : '.login-button',
-  signupButton: '.signup-button',
-  loginSuccessCallbackId: -1,
-  loginErrorCallbackId: -1,
   navItem: null,
 
   constructor: function() {

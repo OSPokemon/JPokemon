@@ -147,36 +147,39 @@ public class OverworldEmissary extends Emissary {
 		}
 
 		List<OverworldEntity> entitiesInside = _getEntitiesAt(overworld, location);
-		List<OverworldEntity> entitiesNext = _getEntitiesAt(overworld, location);
+		List<OverworldEntity> entitiesNext = _getEntitiesAt(overworld, nextLocation);
 
-		for (OverworldEntity overworldEntity : entitiesInside) {
-			MovementScheme movementScheme = MovementScheme.manager.getByName(overworldEntity.getMovement());
+		if (MovementScheme.manager != null) {
+			String oppositeDirection = _oppositeDirection(direction);
 
-			if (movementScheme == null) {
-				continue;
+			for (OverworldEntity overworldEntity : entitiesInside) {
+				MovementScheme movementScheme = MovementScheme.manager.getByName(overworldEntity.getMovement());
+
+				if (movementScheme == null) {
+					continue;
+				}
+				if (!movementScheme.canExitToward(direction)) {
+					_look(connection, direction);
+					return;
+				}
 			}
 
-			if (!movementScheme.canExitToward(direction)) {
-				return;
-			}
-		}
+			for (OverworldEntity overworldEntity : entitiesNext) {
+				MovementScheme movementScheme = MovementScheme.manager.getByName(overworldEntity.getMovement());
 
-		String oppositeDirection = _oppositeDirection(direction);
-
-		for (OverworldEntity overworldEntity : entitiesNext) {
-			MovementScheme movementScheme = MovementScheme.manager.getByName(overworldEntity.getMovement());
-
-			if (movementScheme == null) {
-				continue;
-			}
-
-			if (!movementScheme.canEnterFrom(oppositeDirection)) {
-				return;
+				if (movementScheme == null) {
+					continue;
+				}
+				if (!movementScheme.canEnterFrom(oppositeDirection)) {
+					_look(connection, direction);
+					return;
+				}
 			}
 		}
 
 		location.setX(nextLocation.getX());
 		location.setY(nextLocation.getY());
+		location.setDirection(direction);
 
 		JSONObject updateJson = new JSONObject();
 		updateJson.put("event", "overworld-move");
@@ -194,6 +197,10 @@ public class OverworldEmissary extends Emissary {
 	}
 
 	public void look(WebsocketConnection connection, JSONObject json) {
+		_look(connection, json.getString("direction"));
+	}
+	
+	private void _look(WebsocketConnection connection, String direction) {
 		String name = connection.getName();
 		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
 
@@ -202,13 +209,13 @@ public class OverworldEmissary extends Emissary {
 		}
 		// Don't record clock here
 
-		String direction = json.getString("direction");
-
 		if (_oppositeDirection(direction) == null) { // direction was invalid
 			return;
 		}
 
 		OverworldLocationProperty location = pokemonTrainer.getProperty(OverworldLocationProperty.class);
+		location.setDirection(direction);
+
 		Overworld overworld = Overworld.manager.getByName(location.getOverworld());
 
 		JSONObject updateJson = new JSONObject();
@@ -233,8 +240,8 @@ public class OverworldEmissary extends Emissary {
 		}
 		// Don't record clock here
 
-		String direction = json.getString("direction");
 		OverworldLocationProperty location = pokemonTrainer.getProperty(OverworldLocationProperty.class);
+		String direction = location.getDirection();
 		Overworld overworld = Overworld.manager.getByName(location.getOverworld());
 
 		OverworldLocationProperty nextLocation = _locationInDirection(overworld, location, direction);
@@ -321,7 +328,7 @@ public class OverworldEmissary extends Emissary {
 			if (overworldEntity.getX() <= location.getX()
 					&& overworldEntity.getX() + overworldEntity.getWidth() - 1 >= location.getX()
 					&& overworldEntity.getY() <= location.getY()
-					&& overworldEntity.getY() + overworldEntity.getWidth() - 1 >= location.getY()) {
+					&& overworldEntity.getY() + overworldEntity.getHeight() - 1 >= location.getY()) {
 
 				overworldEntities.add(overworldEntity);
 
@@ -360,7 +367,7 @@ public class OverworldEmissary extends Emissary {
 				nextLocation = null;
 			}
 			else {
-				nextLocation.setY(overworld.getHeight() - 1);
+				nextLocation.setY(location.getY() + 1);
 			}
 		}
 		else if ("right".equals(direction)) {

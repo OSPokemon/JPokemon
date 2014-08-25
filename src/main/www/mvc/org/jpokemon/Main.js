@@ -2,15 +2,25 @@ Emissary.defineController('org.jpokemon.Main', {
   navItems: '.nav.navbar-nav',
   
   constructor: function() {
-    console.log('jpokemon nav bar controller');
-    window.JPokemon = window.JPokemon || {};
-    JPokemon.NavBar = this;
+    JPokemon = {
+      NavBar: this,
+      players: {},
+      player: null
+    };
 
     $.websocket.init();
-    $.websocket.subscribe('admin', this.attachAdminTools.bind(this));
 
     new (Emissary.getController('org.jpokemon.Login'))();
-    new (Emissary.getController('org.jpokemon.Overworld'))();
+    new (Emissary.getController('org.jpokemon.overworld.Overworld'))();
+
+    this.loadDriver();
+  },
+
+  loadDriver: function() {
+    // TODO - check the user agent or something
+    new (Emissary.getController('org.jpokemon.driver.Keyboard'))();
+
+    new (Emissary.getController('org.jpokemon.driver.InputReader'))();
   },
 
   attachNavItem: function(name, callback, dropdown) {
@@ -27,9 +37,5 @@ Emissary.defineController('org.jpokemon.Main', {
 
     navItem.view.appendTo(this.navItems);
     return navItem;
-  },
-
-  attachAdminTools: function(json) {
-    new (Emissary.getController('org.jpokemon.Admin'))(json.authorizationHeader);
   }
 });
