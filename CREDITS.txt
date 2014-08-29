@@ -5,10 +5,17 @@ TILESETS
 indoor_free_tileset__by_thegreatblaid-d5x95zt : http://thegreatblaid.deviantart.com/art/Indoor-free-tileset-358185881
 pallet_town_indoor_tiles_by_Alucus : http://alucus.deviantart.com/art/pallet-town-indoor-tiles-137116188
 tileset_three__indoors_by_falsefate-d41f586 : http://0negaxfmp0.deviantart.com/art/Tileset-ThReE-Indoors-244250934
-
-
+Building_sheet_1_by_zetavares852 : http://zetavares852.deviantart.com/art/Building-sheet-1-171172414
+bunch_o__free_tiles_by_magiscarf-d6ih36g : http://magiscarf.deviantart.com/art/Bunch-o-free-tiles-393827416
 
 
 
 AVATARS
 default : http://www.spriters-resource.com/ds/pokemonheartgoldsoulsilver/sheet/26778/
+
+
+
+
+ITEMS
+cage_for_fairy_by_verdy_k-d4n9r6d : http://verdy-k.deviantart.com/art/Cage-for-fairy-280950997
+

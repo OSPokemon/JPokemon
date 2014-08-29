@@ -1,7 +1,12 @@
 package org.jpokemon;
 
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.jpokemon.action.DoorAction;
+import org.jpokemon.action.OverworldTeleportAction;
+import org.jpokemon.action.SpawnWildBattleAction;
+import org.jpokemon.action.SpeechAction;
 import org.jpokemon.api.Ability;
+import org.jpokemon.api.ActionFactory;
 import org.jpokemon.api.ContestCategory;
 import org.jpokemon.api.ExperienceCurve;
 import org.jpokemon.api.Item;
@@ -51,6 +56,7 @@ public class Main {
 	public static void configureApi() {
 		// Initialize all simple managers
 		Ability.manager = new SimpleManager<Ability>(Ability.class);
+		ActionFactory.manager = new SimpleManager<ActionFactory>(ActionFactory.class);
 		// BattleEffectFactory.manager = new
 		// SimpleManager<BattleEffectFactory>(BattleEffectFactory.class);
 		ContestCategory.manager = new SimpleManager<ContestCategory>(ContestCategory.class);
@@ -74,6 +80,10 @@ public class Main {
 		PropertyProvider.register(new UserIdentityProperty.Provider());
 		PropertyProvider.register(new AvatarsProperty.Provider());
 		PropertyProvider.register(new OverworldLocationProperty.Provider());
+
+		ActionFactory.manager.register(new DoorAction.Factory());
+		ActionFactory.manager.register(new OverworldTeleportAction.Factory());
+		ActionFactory.manager.register(new SpeechAction.Factory());
 	}
 
 	public static void configureServer() {

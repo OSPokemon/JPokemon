@@ -92,7 +92,6 @@ Emissary.defineController('org.jpokemon.overworld.PokemonTrainer', {
   },
 
   addMoveToQueue: function(moveConfig) {
-    console.log('player: [' + this.name + '] push move queue: ' + JSON.stringify(moveConfig));
     this.moveQueue.push(moveConfig);
   }
 });

@@ -22,6 +22,7 @@ Emissary.defineController('org.jpokemon.overworld.Overworld', {
     $.websocket.subscribe('login', this.onLogin);
     $.websocket.subscribe('overworld-load-map', this.onLoadMap);
     $.websocket.subscribe('overworld-add-player', this.onAddPlayer);
+    $.websocket.subscribe('overworld-remove-player', this.onRemovePlayer);
     $.websocket.subscribe('overworld-move', this.onMovePlayer);
     $.websocket.subscribe('overworld-look', this.onLookPlayer);
 
@@ -126,6 +127,7 @@ Emissary.defineController('org.jpokemon.overworld.Overworld', {
   },
 
   loadMap: function(mapName, entityz, players) {
+    JPokemon.players = {};
     me.levelDirector.loadLevel(mapName);
     me.game.world.addChild(me.pool.pull('pokemon-trainer-draw-layer', entityz));
 
@@ -169,5 +171,9 @@ Emissary.defineController('org.jpokemon.overworld.Overworld', {
   onLookPlayer: function(json) {
     JPokemon.players[json.name].renderable.setCurrentAnimation('walk' + json.direction);
     JPokemon.players[json.name].renderable.animationpause = true;
+  },
+
+  onRemovePlayer: function(json) {
+    delete JPokemon.players[json.name];
   }
 });

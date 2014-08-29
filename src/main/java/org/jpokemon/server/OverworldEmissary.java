@@ -3,6 +3,7 @@ package org.jpokemon.server;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.jpokemon.action.OverworldTeleportAction;
 import org.jpokemon.api.Action;
 import org.jpokemon.api.ActionSet;
 import org.jpokemon.api.MovementScheme;
@@ -10,11 +11,8 @@ import org.jpokemon.api.Overworld;
 import org.jpokemon.api.OverworldEntity;
 import org.jpokemon.api.PokemonTrainer;
 import org.jpokemon.api.Requirement;
-import org.jpokemon.property.overworld.TmxFileProperties;
-import org.jpokemon.property.trainer.AvatarsProperty;
 import org.jpokemon.property.trainer.OverworldLocationProperty;
 import org.jpokemon.server.event.PokemonTrainerLogin;
-import org.json.JSONArray;
 import org.json.JSONObject;
 import org.zachtaylor.emissary.Emissary;
 import org.zachtaylor.emissary.WebsocketConnection;
@@ -45,70 +43,18 @@ public class OverworldEmissary extends Emissary {
 
 	public void handle(PokemonTrainerLogin event) {
 		PokemonTrainer pokemonTrainer = event.getPokemonTrainer();
-		OverworldLocationProperty locationProperty = pokemonTrainer.getProperty(OverworldLocationProperty.class);
-		AvatarsProperty avatarsProperty = pokemonTrainer.getProperty(AvatarsProperty.class);
+		OverworldTeleportAction spawnAction = new OverworldTeleportAction();
 
-		if (locationProperty == null) {
-			locationProperty = new OverworldLocationProperty();
-
-			// TODO - make this customizable
-			locationProperty.setOverworld("bedroom");
-			locationProperty.setX(10);
-			locationProperty.setY(5);
-			locationProperty.setDirection("down");
-
-			pokemonTrainer.addProperty(locationProperty);
-		}
-		if (avatarsProperty == null) {
-			avatarsProperty = new AvatarsProperty();
-
-			// TODO - make this customizable
-			avatarsProperty.addAvailableAvatar("default");
-			avatarsProperty.setAvatar("default");
-
-			pokemonTrainer.addProperty(avatarsProperty);
+		OverworldLocationProperty location = pokemonTrainer.getProperty(OverworldLocationProperty.class);
+		if (location == null) {
+			location = getDefaultLocationProperty();
 		}
 
-		Overworld overworld = Overworld.manager.getByName(locationProperty.getOverworld());
+		spawnAction.setOverworld(location.getOverworld());
+		spawnAction.setX(location.getX());
+		spawnAction.setY(location.getY());
 
-		JSONObject mapJson = new JSONObject();
-		mapJson.put("event", "overworld-load-map");
-		mapJson.put("mapName", locationProperty.getOverworld());
-		mapJson.put("tilesets", new JSONArray(overworld.getProperty(TmxFileProperties.class).getTileSets().toString()));
-		mapJson.put("entityz", overworld.getProperty(TmxFileProperties.class).getEntityZIndex());
-
-		JSONObject playerJson = new JSONObject();
-		playerJson.put("name", pokemonTrainer.getName());
-		playerJson.put("avatar", avatarsProperty.getAvatar());
-		playerJson.put("x", locationProperty.getX());
-		playerJson.put("y", locationProperty.getY());
-		playerJson.put("moveSpeed", (String) pokemonTrainer.getProperty("moveSpeed"));
-
-		JSONArray playersArray = new JSONArray();
-		playersArray.put(playerJson);
-
-		synchronized (overworld) {
-			for (String otherPlayerName : overworld.getPokemonTrainers()) {
-				PokemonTrainer otherPokemonTrainer = PokemonTrainer.manager.getByName(otherPlayerName);
-				JSONObject otherPlayerJson = new JSONObject();
-				locationProperty = otherPokemonTrainer.getProperty(OverworldLocationProperty.class);
-				avatarsProperty = otherPokemonTrainer.getProperty(AvatarsProperty.class);
-				otherPlayerJson.put("name", otherPlayerName);
-				otherPlayerJson.put("avatar", avatarsProperty.getAvatar());
-				otherPlayerJson.put("x", locationProperty.getX());
-				otherPlayerJson.put("y", locationProperty.getY());
-				otherPlayerJson.put("moveSpeed", (String) otherPokemonTrainer.getProperty("moveSpeed"));
-
-				WebsocketConnection otherPlayerConnection = PlayerRegistry.getWebsocketConnection(otherPlayerName);
-				otherPlayerConnection.send(playerJson);
-				playersArray.put(otherPlayerJson);
-			}
-
-			mapJson.put("players", playersArray);
-			event.getConnection().send(mapJson);
-
-			overworld.addPokemonTrainer(pokemonTrainer.getName());
-		}
+		spawnAction.execute(null, null, null, pokemonTrainer);
 	}
 
 	public void handle(WebsocketConnectionClose event) {
@@ -194,12 +140,24 @@ public class OverworldEmissary extends Emissary {
 				playerConnection.send(updateJson);
 			}
 		}
+
+		for (OverworldEntity overworldEntity : entitiesNext) {
+			List<ActionSet> stepTriggerActionSets = overworldEntity.getActionSets("step");
+
+			if (stepTriggerActionSets.size() > 0) {
+				for (ActionSet actionSet : stepTriggerActionSets) {
+					for (Action action : actionSet.getActions()) {
+						action.execute(overworld, overworldEntity, actionSet, pokemonTrainer);
+					}
+				}
+			}
+		}
 	}
 
 	public void look(WebsocketConnection connection, JSONObject json) {
 		_look(connection, json.getString("direction"));
 	}
-	
+
 	private void _look(WebsocketConnection connection, String direction) {
 		String name = connection.getName();
 		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
@@ -294,7 +252,7 @@ public class OverworldEmissary extends Emissary {
 		}
 
 		for (Action action : actionSet.getActions()) {
-			action.execute(pokemonTrainer);
+			action.execute(overworld, entity, actionSet, pokemonTrainer);
 		}
 	}
 
@@ -423,5 +381,15 @@ public class OverworldEmissary extends Emissary {
 		}
 
 		return null;
+	}
+
+	private static OverworldLocationProperty getDefaultLocationProperty() {
+		OverworldLocationProperty location = new OverworldLocationProperty();
+
+		location.setOverworld("bedroom");
+		location.setX(5);
+		location.setY(5);
+
+		return location;
 	}
 }
