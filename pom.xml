@@ -48,7 +48,7 @@
 		</dependency>
 		<dependency>
 			<groupId>org.jpokemon</groupId>
-			<artifactId>jpokemon-rest-server-lib</artifactId>
+			<artifactId>jpokemon-server-lib</artifactId>
 			<version>0.1-SNAPSHOT</version>
 		</dependency>
 		<dependency>

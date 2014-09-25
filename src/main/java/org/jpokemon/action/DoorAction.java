@@ -1,51 +1,38 @@
 package org.jpokemon.action;
 
 import org.jpokemon.api.Action;
-import org.jpokemon.api.ActionFactory;
-import org.jpokemon.api.ActionSet;
-import org.jpokemon.api.JPokemonException;
 import org.jpokemon.api.Overworld;
 import org.jpokemon.api.OverworldEntity;
 import org.jpokemon.api.PokemonTrainer;
+import org.jpokemon.builder.SingletonBuilder;
 import org.jpokemon.movement.Door;
 
-public class DoorAction implements Action {
+public class DoorAction extends Action {
 	@Override
-	public void execute(Overworld overworld, OverworldEntity entity, ActionSet actionSet, PokemonTrainer pokemonTrainer) {
+	public void execute(Overworld overworld, OverworldEntity entity, PokemonTrainer pokemonTrainer) {
 
-		Overworld destinationOverworld = Overworld.manager.getByName(entity.getName());
+		Overworld destinationOverworld = Overworld.manager.get(entity.getName());
 		OverworldEntity correspondingDoor = null;
 		for (OverworldEntity foreignEntity : destinationOverworld.getEntities()) {
-			if (foreignEntity.getMovement().equals(Door.class.getName())
+			if (foreignEntity.getMovement() instanceof Door
 					&& foreignEntity.getName().equals(overworld.getName())) {
 				correspondingDoor = foreignEntity;
 			}
 		}
 
 		if (correspondingDoor != null) {
-			OverworldTeleportAction teleport = new OverworldTeleportAction();
+			OverworldTeleport teleport = new OverworldTeleport();
 			teleport.setOverworld(entity.getName());
 			teleport.setX(correspondingDoor.getX());
 			teleport.setY(correspondingDoor.getY());
 
-			teleport.execute(overworld, entity, actionSet, pokemonTrainer);
+			teleport.execute(overworld, entity, pokemonTrainer);
 		}
 	}
 
-	public static class Factory extends ActionFactory {
-		@Override
-		public String getName() {
-			return DoorAction.class.getName();
-		}
-
-		@Override
-		public Action buildAction(String options) throws JPokemonException {
-			return new DoorAction();
-		}
-
-		@Override
-		public String serializeAction(Action action) throws JPokemonException {
-			return null;
+	public static class Builder extends SingletonBuilder<Action> {
+		public Builder() {
+			super(new DoorAction());
 		}
 	}
 }

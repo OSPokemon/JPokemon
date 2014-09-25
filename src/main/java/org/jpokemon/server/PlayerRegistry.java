@@ -3,7 +3,7 @@ package org.jpokemon.server;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.jpokemon.api.PokemonTrainer;
-import org.jpokemon.property.trainer.server.UserIdentityProperty;
+import org.jpokemon.property.trainer.server.ServerIdentity;
 import org.jpokemon.server.event.PokemonTrainerLogin;
 import org.json.JSONObject;
 import org.zachtaylor.emissary.Emissary;
@@ -30,15 +30,15 @@ public class PlayerRegistry extends Emissary {
 		String name = json.getString("username");
 		String password = json.getString("password");
 
-		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
+		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.get(name);
 
 		if (pokemonTrainer == null) { // NOOP
 			return;
 		}
 
-		UserIdentityProperty UserIdentityProperty = pokemonTrainer.getProperty(UserIdentityProperty.class);
+		ServerIdentity serverIdentity = pokemonTrainer.getProperty(ServerIdentity.class);
 
-		if (UserIdentityProperty == null || UserIdentityProperty.getPassword().equals(password)) {
+		if (serverIdentity == null || serverIdentity.getPassword().equals(password)) {
 			connections.put(name, connection);
 			connection.setName(name);
 			connection.setEmissary(new DefaultEmissary());

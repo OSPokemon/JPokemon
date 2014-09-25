@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.jpokemon.api.JPokemonException;
-import org.jpokemon.api.PropertyProvider;
 import org.jpokemon.util.Options;
 
 /**
@@ -52,14 +51,14 @@ public class PokemonSpawnProperty {
 		this.species = species;
 	}
 
-	public static class Provider extends PropertyProvider<PokemonSpawnProperty> {
+	public static class Builder implements org.jpokemon.api.Builder<Object> {
 		@Override
-		public String getName() {
+		public String getId() {
 			return PokemonSpawnProperty.class.getName();
 		}
 
 		@Override
-		public PokemonSpawnProperty build(String o) throws JPokemonException {
+		public PokemonSpawnProperty construct(String o) throws JPokemonException {
 			Map<String, String> options = Options.parseMap(o);
 			PokemonSpawnProperty property = new PokemonSpawnProperty();
 
@@ -82,7 +81,7 @@ public class PokemonSpawnProperty {
 		}
 
 		@Override
-		public String serialize(Object object) throws JPokemonException {
+		public String destruct(Object object) throws JPokemonException {
 			PokemonSpawnProperty property = (PokemonSpawnProperty) object;
 
 			Map<String, String> map = new HashMap<String, String>();

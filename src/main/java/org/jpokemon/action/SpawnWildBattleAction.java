@@ -3,7 +3,6 @@ package org.jpokemon.action;
 import java.util.Map;
 
 import org.jpokemon.api.Action;
-import org.jpokemon.api.ActionSet;
 import org.jpokemon.api.Battle;
 import org.jpokemon.api.Overworld;
 import org.jpokemon.api.OverworldEntity;
@@ -12,11 +11,11 @@ import org.jpokemon.api.PokemonContainer;
 import org.jpokemon.api.PokemonTrainer;
 import org.jpokemon.api.TrainerContainer;
 import org.jpokemon.property.overworldentity.PokemonSpawnProperty;
-import org.jpokemon.util.Builder;
+import org.jpokemon.util.Macro;
 
-public class SpawnWildBattleAction implements Action {
+public class SpawnWildBattleAction extends Action {
 	@Override
-	public void execute(Overworld overworld, OverworldEntity entity, ActionSet actionSet, PokemonTrainer pokemonTrainer) {
+	public void execute(Overworld overworld, OverworldEntity entity, PokemonTrainer pokemonTrainer) {
 		PokemonSpawnProperty spawnProperties = entity.getProperty(PokemonSpawnProperty.class);
 
 		if (spawnProperties == null) {
@@ -27,7 +26,7 @@ public class SpawnWildBattleAction implements Action {
 		trainerContainer.setPokemonTrainer(pokemonTrainer);
 
 		for (Pokemon pokemon : pokemonTrainer.getPokemon()) {
-			PokemonContainer pokemonContainer = Builder.pokemonContainerWithPokemon(pokemon);
+			PokemonContainer pokemonContainer = Macro.buildPokemonContainerWithPokemon(pokemon);
 			trainerContainer.getPokemonContainers().add(pokemonContainer);
 		}
 
@@ -50,9 +49,9 @@ public class SpawnWildBattleAction implements Action {
 		int wildPokemonLevel = spawnProperties.getMinLevel()
 				+ (int) (Math.random() * (spawnProperties.getMaxLevel() - spawnProperties.getMinLevel()));
 
-		Pokemon wildPokemon = Builder.pokemonWithSpeciesAndLevel(species, wildPokemonLevel);
+		Pokemon wildPokemon = Macro.buildPokemonWithSpeciesAndLevel(species, wildPokemonLevel);
 
-		PokemonContainer wildPokemonContainer = Builder.pokemonContainerWithPokemon(wildPokemon);
+		PokemonContainer wildPokemonContainer = Macro.buildPokemonContainerWithPokemon(wildPokemon);
 
 		emptyOpponentContainer.addPokemonContainer(wildPokemonContainer);
 

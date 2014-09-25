@@ -3,7 +3,8 @@ package org.jpokemon.server;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.jpokemon.action.OverworldTeleportAction;
+import org.jpokemon.action.DoorAction;
+import org.jpokemon.action.OverworldTeleport;
 import org.jpokemon.api.Action;
 import org.jpokemon.api.ActionSet;
 import org.jpokemon.api.MovementScheme;
@@ -11,7 +12,7 @@ import org.jpokemon.api.Overworld;
 import org.jpokemon.api.OverworldEntity;
 import org.jpokemon.api.PokemonTrainer;
 import org.jpokemon.api.Requirement;
-import org.jpokemon.property.trainer.OverworldLocationProperty;
+import org.jpokemon.property.trainer.OverworldLocation;
 import org.jpokemon.server.event.PokemonTrainerLogin;
 import org.json.JSONObject;
 import org.zachtaylor.emissary.Emissary;
@@ -43,9 +44,9 @@ public class OverworldEmissary extends Emissary {
 
 	public void handle(PokemonTrainerLogin event) {
 		PokemonTrainer pokemonTrainer = event.getPokemonTrainer();
-		OverworldTeleportAction spawnAction = new OverworldTeleportAction();
+		OverworldTeleport spawnAction = new OverworldTeleport();
 
-		OverworldLocationProperty location = pokemonTrainer.getProperty(OverworldLocationProperty.class);
+		OverworldLocation location = pokemonTrainer.getProperty(OverworldLocation.class);
 		if (location == null) {
 			location = getDefaultLocationProperty();
 		}
@@ -54,7 +55,7 @@ public class OverworldEmissary extends Emissary {
 		spawnAction.setX(location.getX());
 		spawnAction.setY(location.getY());
 
-		spawnAction.execute(null, null, null, pokemonTrainer);
+		spawnAction.execute(null, null, pokemonTrainer);
 	}
 
 	public void handle(WebsocketConnectionClose event) {
@@ -64,9 +65,9 @@ public class OverworldEmissary extends Emissary {
 			return;
 		}
 
-		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
-		OverworldLocationProperty locationProperty = pokemonTrainer.getProperty(OverworldLocationProperty.class);
-		Overworld overworld = Overworld.manager.getByName(locationProperty.getOverworld());
+		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.get(name);
+		OverworldLocation locationProperty = pokemonTrainer.getProperty(OverworldLocation.class);
+		Overworld overworld = Overworld.manager.get(locationProperty.getOverworld());
 
 		synchronized (overworld) {
 			overworld.removePokemonTrainer(name);
@@ -75,7 +76,7 @@ public class OverworldEmissary extends Emissary {
 
 	public void move(WebsocketConnection connection, JSONObject json) {
 		String name = connection.getName();
-		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
+		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.get(name);
 
 		if (!_checkClock(pokemonTrainer)) {
 			return;
@@ -83,10 +84,10 @@ public class OverworldEmissary extends Emissary {
 		_recordClock(pokemonTrainer);
 
 		String direction = json.getString("direction");
-		OverworldLocationProperty location = pokemonTrainer.getProperty(OverworldLocationProperty.class);
-		Overworld overworld = Overworld.manager.getByName(location.getOverworld());
+		OverworldLocation location = pokemonTrainer.getProperty(OverworldLocation.class);
+		Overworld overworld = Overworld.manager.get(location.getOverworld());
 
-		OverworldLocationProperty nextLocation = _locationInDirection(overworld, location, direction);
+		OverworldLocation nextLocation = _locationInDirection(overworld, location, direction);
 
 		if (nextLocation == null) {
 			return;
@@ -95,28 +96,31 @@ public class OverworldEmissary extends Emissary {
 		List<OverworldEntity> entitiesInside = _getEntitiesAt(overworld, location);
 		List<OverworldEntity> entitiesNext = _getEntitiesAt(overworld, nextLocation);
 
-		if (MovementScheme.manager != null) {
-			String oppositeDirection = _oppositeDirection(direction);
-
+		if (MovementScheme.builders != null) {
 			for (OverworldEntity overworldEntity : entitiesInside) {
-				MovementScheme movementScheme = MovementScheme.manager.getByName(overworldEntity.getMovement());
+				MovementScheme movementScheme = overworldEntity.getMovement();
 
 				if (movementScheme == null) {
 					continue;
 				}
-				if (!movementScheme.canExitToward(direction)) {
-					_look(connection, direction);
+				String nextMove = movementScheme.getNextMove(direction);
+				if (nextMove == null) {
 					return;
 				}
 			}
 
 			for (OverworldEntity overworldEntity : entitiesNext) {
-				MovementScheme movementScheme = MovementScheme.manager.getByName(overworldEntity.getMovement());
+				MovementScheme movementScheme = overworldEntity.getMovement();
 
 				if (movementScheme == null) {
 					continue;
 				}
-				if (!movementScheme.canEnterFrom(oppositeDirection)) {
+				if (movementScheme instanceof org.jpokemon.movement.Door) {
+					DoorAction doorAction = new DoorAction();
+					doorAction.execute(overworld, overworldEntity, pokemonTrainer);
+				}
+				String nextMove = movementScheme.getNextMove(direction);
+				if (nextMove == null) {
 					_look(connection, direction);
 					return;
 				}
@@ -142,12 +146,13 @@ public class OverworldEmissary extends Emissary {
 		}
 
 		for (OverworldEntity overworldEntity : entitiesNext) {
-			List<ActionSet> stepTriggerActionSets = overworldEntity.getActionSets("step");
+			List<String> stepTriggerActionSets = overworldEntity.getActionSets("step");
 
 			if (stepTriggerActionSets.size() > 0) {
-				for (ActionSet actionSet : stepTriggerActionSets) {
+				for (String actionSetId : stepTriggerActionSets) {
+					ActionSet actionSet = ActionSet.manager.get(actionSetId);
 					for (Action action : actionSet.getActions()) {
-						action.execute(overworld, overworldEntity, actionSet, pokemonTrainer);
+						action.execute(overworld, overworldEntity, pokemonTrainer);
 					}
 				}
 			}
@@ -160,7 +165,7 @@ public class OverworldEmissary extends Emissary {
 
 	private void _look(WebsocketConnection connection, String direction) {
 		String name = connection.getName();
-		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
+		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.get(name);
 
 		if (!_checkClock(pokemonTrainer)) {
 			return;
@@ -171,10 +176,10 @@ public class OverworldEmissary extends Emissary {
 			return;
 		}
 
-		OverworldLocationProperty location = pokemonTrainer.getProperty(OverworldLocationProperty.class);
+		OverworldLocation location = pokemonTrainer.getProperty(OverworldLocation.class);
 		location.setDirection(direction);
 
-		Overworld overworld = Overworld.manager.getByName(location.getOverworld());
+		Overworld overworld = Overworld.manager.get(location.getOverworld());
 
 		JSONObject updateJson = new JSONObject();
 		updateJson.put("event", "overworld-look");
@@ -191,18 +196,18 @@ public class OverworldEmissary extends Emissary {
 
 	public void interact(WebsocketConnection connection, JSONObject json) {
 		String name = connection.getName();
-		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.getByName(name);
+		PokemonTrainer pokemonTrainer = PokemonTrainer.manager.get(name);
 
 		if (!_checkClock(pokemonTrainer)) {
 			return;
 		}
 		// Don't record clock here
 
-		OverworldLocationProperty location = pokemonTrainer.getProperty(OverworldLocationProperty.class);
+		OverworldLocation location = pokemonTrainer.getProperty(OverworldLocation.class);
 		String direction = location.getDirection();
-		Overworld overworld = Overworld.manager.getByName(location.getOverworld());
+		Overworld overworld = Overworld.manager.get(location.getOverworld());
 
-		OverworldLocationProperty nextLocation = _locationInDirection(overworld, location, direction);
+		OverworldLocation nextLocation = _locationInDirection(overworld, location, direction);
 
 		if (nextLocation == null) {
 			return;
@@ -213,7 +218,7 @@ public class OverworldEmissary extends Emissary {
 		List<String> entitiesWithInteractOptions = new ArrayList<String>();
 
 		for (OverworldEntity entity : entities) {
-			List<ActionSet> actionSets = entity.getActionSets("interact");
+			List<String> actionSets = entity.getActionSets("interact");
 
 			if (actionSets != null && actionSets.size() > 0) {
 				entitiesWithInteractOptions.add(entity.getName());
@@ -222,6 +227,7 @@ public class OverworldEmissary extends Emissary {
 
 		if (entitiesWithInteractOptions.size() > 1) {
 			// TODO - send question to which entity to interact to i guess
+			// and try to resolve that response later
 			return;
 		}
 		if (entitiesWithInteractOptions.size() < 1) {
@@ -236,23 +242,23 @@ public class OverworldEmissary extends Emissary {
 			}
 		}
 
-		List<ActionSet> actionSets = entity.getActionSets("interact");
+		List<String> actionSets = entity.getActionSets("interact");
 
 		if (actionSets.size() > 1) {
 			// TODO - send question to have a chat choice i guess
 			return;
 		}
 
-		ActionSet actionSet = actionSets.get(0);
+		ActionSet actionSet = ActionSet.manager.get(actionSets.get(0));
 
 		for (Requirement requirement : actionSet.getRequirements()) {
-			if (!requirement.isSatisfied(pokemonTrainer)) {
+			if (!requirement.test(pokemonTrainer, null)) {
 				return;
 			}
 		}
 
 		for (Action action : actionSet.getActions()) {
-			action.execute(overworld, entity, actionSet, pokemonTrainer);
+			action.execute(overworld, entity, pokemonTrainer);
 		}
 	}
 
@@ -279,7 +285,7 @@ public class OverworldEmissary extends Emissary {
 		pokemonTrainer.setProperty("moveTime", moveTime + "");
 	}
 
-	private List<OverworldEntity> _getEntitiesAt(Overworld overworld, OverworldLocationProperty location) {
+	private List<OverworldEntity> _getEntitiesAt(Overworld overworld, OverworldLocation location) {
 		List<OverworldEntity> overworldEntities = new ArrayList<OverworldEntity>();
 
 		for (OverworldEntity overworldEntity : overworld.getEntities()) {
@@ -296,9 +302,9 @@ public class OverworldEmissary extends Emissary {
 		return overworldEntities;
 	}
 
-	private OverworldLocationProperty _locationInDirection(Overworld overworld, OverworldLocationProperty location,
+	private OverworldLocation _locationInDirection(Overworld overworld, OverworldLocation location,
 			String direction) {
-		OverworldLocationProperty nextLocation = new OverworldLocationProperty();
+		OverworldLocation nextLocation = new OverworldLocation();
 
 		nextLocation.setOverworld(location.getOverworld());
 		nextLocation.setX(location.getX());
@@ -383,8 +389,8 @@ public class OverworldEmissary extends Emissary {
 		return null;
 	}
 
-	private static OverworldLocationProperty getDefaultLocationProperty() {
-		OverworldLocationProperty location = new OverworldLocationProperty();
+	private static OverworldLocation getDefaultLocationProperty() {
+		OverworldLocation location = new OverworldLocation();
 
 		location.setOverworld("bedroom");
 		location.setX(5);
